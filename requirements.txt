@@ -1,0 +1,6 @@
+torch
+torchvision
+monai
+pydicom
+matplotlib
+jupyter
