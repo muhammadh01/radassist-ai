@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radassist
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: radassist }
+  template:
+    metadata:
+      labels: { app: radassist }
+    spec:
+      containers:
+      - name: api
+        image: ghcr.io/muhammadh01/radassist-ai:v1
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: radassist
+spec:
+  selector: { app: radassist }
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP

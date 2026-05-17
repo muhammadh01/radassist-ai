@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8000";
+const API_URL = "";
 const SAMPLES = [
   { id: 1, src: "/samples/sample1.png", label: "Sample 1" },
   { id: 2, src: "/samples/sample2.png", label: "Sample 2" },
