@@ -3,11 +3,17 @@ kind: Ingress
 metadata:
   name: radassist
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: traefik
+  tls:
+  - hosts:
+    - radassist.durak.dev
+    secretName: radassist-tls
   rules:
-  - http:
+  - host: radassist.durak.dev
+    http:
       paths:
       - path: /
         pathType: Prefix
