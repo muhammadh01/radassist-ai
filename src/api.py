@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import torch
 from PIL import Image
@@ -8,6 +9,13 @@ import numpy as np
 from src.model import get_model
 
 app = FastAPI(title="RadAssist AI")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 model = get_model().to(device)
