@@ -1,10 +1,9 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 import torch
 from PIL import Image
 from torchvision import transforms
-import io
+import io, base64
 import numpy as np
 from src.model import get_model
 
@@ -38,11 +37,25 @@ async def predict(file: UploadFile = File(...)):
     tensor = tf(img).unsqueeze(0).to(device)
 
     with torch.no_grad():
-        pred = model(tensor)
-        pred = torch.sigmoid(pred).cpu().squeeze().numpy()
-        pred = (pred > 0.5).astype(np.uint8) * 255
+        out = model(tensor)
+        prob = torch.sigmoid(out).cpu().squeeze().numpy()
+        mask = (prob > 0.5).astype(np.uint8)
 
-    mask_img = Image.fromarray(pred)
+    lung_pixels = int(mask.sum())
+    total_pixels = mask.size
+    area_pct = round(lung_pixels / total_pixels * 100, 2)
+    confidence = round(float(prob[mask == 1].mean()) * 100, 2) if lung_pixels > 0 else 0
+
+    mask_img = Image.fromarray(mask * 255)
     buf = io.BytesIO()
     mask_img.save(buf, format="PNG")
-    return Response(content=buf.getvalue(), media_type="image/png")
+    mask_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    return {
+        "mask": f"data:image/png;base64,{mask_b64}",
+        "stats": {
+            "lung_area_pct": area_pct,
+            "confidence": confidence,
+            "resolution": "256x256",
+        }
+    }
