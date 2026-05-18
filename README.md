@@ -1,10 +1,13 @@
 # RadAssist AI
 
-AI-powered lung segmentation from chest X-rays using a U-Net convolutional neural network.
+AI-powered lung segmentation from chest X-rays using a U-Net convolutional neural network. Production-deployed on Kubernetes with HTTPS, custom domain, and automated CI/CD.
 
-![Status](https://img.shields.io/badge/status-active-success)
+![Status](https://img.shields.io/badge/status-live-success)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![PyTorch](https://img.shields.io/badge/pytorch-2.9-orange)
+![k8s](https://img.shields.io/badge/kubernetes-k3s-326CE5)
+
+🌐 **Live Demo**: [radassist.durak.dev](https://radassist.durak.dev)
 
 ## Overview
 
@@ -37,92 +40,75 @@ CNNs are the right tool because lung shape is a **spatial pattern**: edges, curv
 
 U-Net has two halves shaped like a "U":
 
-```
-Input (256×256)
-      │
-   ┌──▼──┐  Encoder (downsampling)
-   │ 16  │  ─────────┐  ← captures "what" is in the image
-   └──┬──┘           │
-   ┌──▼──┐           │
-   │ 32  │  ───────┐ │
-   └──┬──┘         │ │
-   ┌──▼──┐         │ │   skip connections
-   │ 64  │  ─────┐ │ │   preserve spatial detail
-   └──┬──┘       │ │ │
-   ┌──▼──┐       │ │ │
-   │ 128 │  ───┐ │ │ │
-   └──┬──┘     │ │ │ │
-   ┌──▼──┐     │ │ │ │
-   │ 256 │ ← bottleneck (most abstract features)
-   └──┬──┘     │ │ │ │
-   ┌──▼──┐ ◀───┘ │ │ │
-   │ 128 │       │ │ │   Decoder (upsampling)
-   └──┬──┘       │ │ │   ← reconstructs "where" things are
-   ┌──▼──┐ ◀─────┘ │ │
-   │ 64  │         │ │
-   └──┬──┘         │ │
-   ┌──▼──┐ ◀───────┘ │
-   │ 32  │           │
-   └──┬──┘           │
-   ┌──▼──┐ ◀─────────┘
-   │ 16  │
-   └──┬──┘
-      ▼
-  Mask (256×256)
-```
-
-- **Encoder**: 5 downsampling blocks. Each halves the image size and doubles the feature channels (16→32→64→128→256).
-- **Decoder**: 5 upsampling blocks that rebuild the image at full resolution.
-- **Skip connections**: copy detailed spatial info from encoder to decoder. Without them, fine edges get lost during downsampling.
-- **Output**: single-channel probability map. Threshold > 0.5 → final binary mask.
+- **Encoder**: 5 downsampling blocks (16→32→64→128→256 channels)
+- **Decoder**: 5 upsampling blocks that rebuild the image
+- **Skip connections**: copy spatial detail from encoder to decoder
+- **Output**: probability map, threshold > 0.5 → binary mask
 
 **Parameters**: 1,624,844 (lightweight — runs on CPU in <1s).
 
 ### Training
 
-- **Framework**: PyTorch + [MONAI](https://monai.io/) (medical imaging toolkit)
-- **Hardware**: Apple Silicon GPU (Metal Performance Shaders / MPS)
-- **Loss function**: **Dice Loss** — directly optimizes overlap between predicted and ground-truth mask. Better than cross-entropy for segmentation because it handles class imbalance (most pixels are background).
-- **Optimizer**: Adam, learning rate 1e-3
-- **Epochs**: 10
-- **Batch size**: 8
-- **Train/val split**: 80/20
-- **Preprocessing**: resize to 256×256, normalize to [0,1]
+- **Framework**: PyTorch + [MONAI](https://monai.io/)
+- **Hardware**: Apple Silicon GPU (MPS)
+- **Loss**: Dice Loss (handles class imbalance better than cross-entropy)
+- **Optimizer**: Adam, lr 1e-3
+- **Epochs**: 10 · **Batch size**: 8 · **Split**: 80/20
 
 ### Results
 
 | Metric | Value |
 |---|---|
-| Final train loss | 0.077 |
-| Final val loss | 0.073 |
-| Approximate Dice score | ~0.93 (93% overlap with ground truth) |
-| Inference time | <1s on CPU |
-
-Train and val loss decrease together with a small gap → no overfitting.
+| Train loss | 0.077 |
+| Val loss | 0.073 |
+| Dice score | ~0.93 |
+| Inference | <1s on CPU |
 
 ## System Architecture
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│  React UI   │ ───▶ │ FastAPI      │ ───▶ │  U-Net      │
-│  (Vite)     │ ◀─── │ (Python)     │ ◀─── │  (PyTorch)  │
-└─────────────┘      └──────────────┘      └─────────────┘
+                       ┌─────────────────────┐
+                       │ radassist.durak.dev │  ← Custom domain + HTTPS
+                       └──────────┬──────────┘
+                                  │
+                       ┌──────────▼──────────┐
+                       │  Traefik Ingress    │  ← cert-manager + Let's Encrypt
+                       └──────────┬──────────┘
+                                  │
+            ┌─────────────────────┴─────────────────────┐
+   ┌────────▼────────┐                         ┌────────▼────────┐
+   │  Frontend Pod   │ ──── /predict ────▶    │  Backend Pod    │
+   │ (nginx + React) │   (with API key)        │ (FastAPI + ML) │
+   └─────────────────┘                         └─────────────────┘
+                                                        │
+                                                ┌───────▼────────┐
+                                                │  U-Net Model   │
+                                                │ (1.6M params)  │
+                                                └────────────────┘
 ```
 
 ## Stack
 
-- **Model**: U-Net (MONAI), 1.6M parameters
-- **Backend**: FastAPI, PyTorch
-- **Frontend**: React + Vite
-- **Training**: Apple Silicon GPU (MPS)
-- **Container**: Docker
-- **Deployment**: Kubernetes (k3s) on DigitalOcean
+**ML** — PyTorch · MONAI · U-Net
+**Backend** — FastAPI · API key auth
+**Frontend** — React · Vite · drag-drop · overlay · stats
+**Infrastructure** — Docker · k3s · Traefik · cert-manager · Let's Encrypt · DigitalOcean
+**DevOps** — GHCR · GitHub Actions CI/CD · rolling updates
+
+## CI/CD
+
+Every push to `main` triggers:
+1. Build & push API image to GHCR
+2. Build & push Web image to GHCR
+3. SSH to droplet, update k8s deployments
+4. Zero-downtime rolling update
 
 ## Quick Start
 
 ### Backend
 ```bash
 pip install -r requirements.txt
+export API_KEY=your-secret-key
 uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -136,32 +122,50 @@ npm run dev
 ### Docker
 ```bash
 docker build -t radassist-ai:v1 .
-docker run -p 8000:8000 radassist-ai:v1
+docker run -p 8000:8000 -e API_KEY=your-secret-key radassist-ai:v1
+```
+
+## API Usage
+
+```bash
+curl -X POST https://radassist.durak.dev/predict \
+  -H "x-api-key: YOUR_KEY" \
+  -F "file=@chest_xray.png"
+```
+
+Returns:
+```json
+{
+  "mask": "data:image/png;base64,...",
+  "stats": {
+    "lung_area_pct": 31.08,
+    "confidence": 99.37,
+    "resolution": "256x256"
+  }
+}
 ```
 
 ## Project Structure
 
 ```
 radassist-ai/
-├── src/              # Backend (FastAPI + model)
-│   ├── api.py        # REST endpoints
-│   ├── model.py      # U-Net definition
-│   ├── train.py      # Training script
-│   └── dataset.py    # Data loader
-├── web/              # React frontend
-├── models/           # Trained weights
-├── Dockerfile        # Container build
+├── src/                  # Backend (FastAPI + model)
+├── web/                  # React frontend + nginx
+├── k8s/                  # Kubernetes manifests
+├── .github/workflows/    # CI/CD pipeline
+├── models/               # Trained weights
+├── Dockerfile
 └── requirements.txt
 ```
 
 ## Dataset
 
-- [Montgomery County + Shenzhen Hospital X-ray Sets](https://www.kaggle.com/datasets/nikhilpandey360/chest-xray-masks-and-labels) — 704 paired X-rays and lung masks.
+[Montgomery + Shenzhen Hospital X-rays](https://www.kaggle.com/datasets/nikhilpandey360/chest-xray-masks-and-labels) — 704 paired X-rays and masks.
 
 ## References
 
 - Ronneberger, O., Fischer, P., & Brox, T. (2015). [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597).
-- [MONAI Framework](https://monai.io/) — PyTorch-based medical imaging library.
+- [MONAI Framework](https://monai.io/)
 
 ## License
 
