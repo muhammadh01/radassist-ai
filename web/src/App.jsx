@@ -26,7 +26,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${API_URL}/predict`, { method: "POST", body: formData });
+      const res = await fetch(`${API_URL}/predict`, { method: "POST", headers: { "x-api-key": "YOUR_KEY_HERE" }, body: formData });
       if (!res.ok) throw new Error("Prediction failed");
       const data = await res.json();
       setMask(data.mask);
